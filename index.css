@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Is TLS Fast Yet?</title>
+
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400" rel="stylesheet" type="text/css">
+
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/style.css" />
+
+    <meta name="author" content="Ilya Grigorik" />
+    <meta name="twitter:card" content="summary">
+
+    <meta name="description" content="TLS has exactly one performance problem: it is not used widely enough. Everything else can be optimized." />
+    <meta name="twitter:description" content="TLS has exactly one performance problem: it is not used widely enough. Everything else can be optimized.">
+
+    <meta property="og:image" content="/images/preview.png" />
+    <meta name="twitter:image:src" content="/images/preview.png">
+
+    <meta name="twitter:creator" content="@igrigorik">
+    <meta name="twitter:url" content="https://istlsfastyet.com/">
+    <meta name="twitter:title" content="Is TLS Fast Yet?">
+
+  </head>
+  <body>
+  <header>
+    <div class="row">
+      <div class="large-12 columns">
+        <h2>TLS has exactly one performance problem: it is not used widely enough.</h2>
+        <h3>Everything else can be optimized.</h3>
+      </div>
+    </div>
+  </header>
+
+  <div class="row">
+    <div class="small-12 columns">
+      <p>Data delivered over an unencrypted channel is insecure, untrustworthy, and trivially intercepted. We owe it to our users to protect the security, privacy, and integrity of their data &mdash; all data must be encrypted while in flight and at rest. Historically, concerns over performance have been the common excuse to avoid these obligations, but today that is a false dichotomy. Let's dispel some myths.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="large-12 columns">
+      <h3 id="cpu-latency"><a href="#cpu-latency">CPU &amp; latency costs</a></h3>
+    </div>
+
+    <div class="small-12 medium-8 large-8 columns">
+      <p>The process of establishing and communicating over an encrypted channel introduces additional computational costs. First, there is the asymmetric (public key) encryption used during the TLS handshake. Then, once a shared secret is established, symmetric encryption takes over.</p>
+    </div>
+
+    <div class="small-12 medium-4 large-4 columns  panel">
+<pre><b># upgrade to latest</b>
+$> openssl version
+OpenSSL 1.1.1a  20 Nov 2018
+
+<b># run benchmarks</b>
+$> openssl speed sha
+$> openssl speed ecdh</pre>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="small-12 large-12 columns">
+      <p>Good news is, modern hardware has made great improvements to help minimize these costs, and what once may have required additional hardware can now be done efficiently by the CPU.</p>
+    </div>
+  </div>
+
+  <div class="row panel callout">
+    <div class="small-12 medium-6 large-6 columns">
+      <p>
+      <q>On our production frontend machines, SSL/TLS accounts for less than 1% of the CPU load, less than 10 KB of memory per connection and less than 2% of network overhead. Many people believe that SSL/TLS takes a lot of CPU time and we hope the preceding numbers will help to dispel that.</q><br/>
+      <cite class="right"> - Adam Langley, Google <a href="https://www.imperialviolet.org/2010/06/25/overclocking-ssl.html">"Overclocking SSL"</a></cite>
+    </p>
+    </div>
+
+    <div class="small-12 medium-6 large-6 columns">
+      <p>
+      <q>We have deployed TLS at a large scale using both hardware and software load balancers. We have found that modern software-based TLS implementations running on commodity CPUs are fast enough to handle heavy HTTPS traffic load without needing to resort to dedicated cryptographic hardware.</q><br/>
+      <cite class="right"> - Doug Beaver, Facebook <a href="https://lists.w3.org/Archives/Public/ietf-http-wg/2012JulSep/0251.html">"HTTP2 Expression of Interest"</a></cite>
+    </p>
+    </div>
+
+    <div class="small-12 large-12 columns">
+      <p></p>
+      <p>
+      <q>Elliptic Curve Diffie-Hellman (ECDHE) is only a little more expensive than RSA for an equivalent security level… In practical deployment, we found that enabling and prioritizing ECDHE cipher suites actually caused negligible increase in CPU usage. HTTP keepalives and session resumption mean that most requests do not require a full handshake, so handshake operations do not dominate our CPU usage. We find 75% of Twitter’s client requests are sent over connections established using ECDHE. The remaining 25% consists mostly of older clients that don’t yet support the ECDHE cipher suites.</q><br/>
+      <cite class="right"> - Jacob Hoffman-Andrews, Twitter <a href="https://blog.twitter.com/2013/forward-secrecy-at-twitter-0">"Forward Secrecy at Twitter"</a></cite>
+      </p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="small-12 medium-8 large-8 columns">
+      <p>Before the client and the server can begin exchanging application data over TLS, the encrypted tunnel must be negotiated, which introduces additional roundtrips for each new connection. However, we don't have to incur the cost of a full handshake in every case: TLS resumption and TLS False Start decrease the cost to a single roundtrip for new and returning clients.</p>
+    </div>
+    <div class="small-12 medium-4 large-4 columns text-center">
+      <img src="images/rtts.png" alt=""/>
+    </div>
+
+
+  </div>
+
+  <div class="row">
+    <div class="small-12 medium-8 large-8 columns">
+      <hr />
+      <p>A well tuned TLS deployment can make an enormous positive difference in the user experience, as well as in your operational costs. Some of the most critical features and concepts:</p>
+
+      <ul>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#tls-handshake">TLS handshake</a></li>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#tls-session-resumption">TLS session resumption</a></li>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#enable-tls-false-start">TLS False Start</a></li>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#optimize-tls-record-size">TLS record size optimization</a></li>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#leverage-early-termination">Early termination</a></li>
+        <li><a href="https://hpbn.co/transport-layer-security-tls/#enable-http-strict-transport-security-hsts">HTTP Strict Transport Security (HSTS)</a></li>
+      </ul>
+
+      <p>To deliver the best performance, run down the <a href="https://hpbn.co/transport-layer-security-tls/#optimizing-for-tls">TLS performance checklist</a> and use a tool like <a href="https://www.ssllabs.com/ssltest/">Qualys SSL Server Test</a> to scan your server for common configuration and security flaws.</p>
+    </div>
+
+    <div class="small-12 medium-4 large-4 columns panel">
+      <h5>High Performance Browser Networking</h5>
+      <img src="images/hpbn.png" alt=""/>
+      <p><i>What every developer should know about networking and web performance.</i></p>
+      <a href="https://hpbn.co/?utm_source=istlsfastyet&amp;utm_medium=referral&amp;utm_campaign=tls" class="success button expand">Read HPBN online</a>
+    </div>
+
+    <hr />
+  </div>
+
+  <div class="row">
+    <div class="large-12 columns">
+      <h3 id="server-performance"><a href="#server-performance">Server performance</a></h3>
+      <p>TLS exposes many different knobs and new config flags on every server. Our goal here is not to provide an exhaustive list (consult server docs for that), but to highlight status of important performance-oriented features: resumption, stapling, false start (requires ALPN and forward secrecy), and support for the HTTP/2 protocol.</p>
+
+      <table class="cf">
+        <thead>
+          <tr>
+            <th style="width: 100px">&nbsp;</th>
+            <th>Session identifiers</th>
+            <th>Session tickets</th>
+            <th>OCSP stapling</th>
+            <th>Dynamic record sizing</th>
+            <th>ALPN</th>
+            <th>Forward secrecy</th>
+            <th>HTTP/2</th>
+            <th>TLS 1.3</th>
+            <th>TLS 1.3 <nobr>0-RTT</nobr></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="https://httpd.apache.org/docs/2.4/mod/mod_ssl.html">Apache</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/2.4/mod/mod_ssl.html#sslsessioncache">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/2.4/mod/mod_ssl.html#sslsessionticketkeyfile">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/2.4/mod/mod_ssl.html#sslusestapling">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/2.4/mod/mod_http2.html#h2tlscooldownsecs">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/trunk/mod/mod_ssl.html#sslalpnpreference">yes</a></td>
+            <td class="ok"><a href="https://wiki.mozilla.org/Security/Server_Side_TLS#Apache">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/trunk/mod/mod_http2.html">yes</a></td>
+            <td class="ok"><a href="https://httpd.apache.org/docs/2.4/mod/mod_ssl.html#sslciphersuite">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://docs.trafficserver.apache.org/en/latest/index.html">ATS</a></td>
+            <td class="ok"><a href="https://docs.trafficserver.apache.org/en/latest/admin-guide/files/records.config.en.html#proxy-config-ssl-session-cache-timeout">yes</a></td>
+            <td class="ok"><a href="https://cwiki.apache.org/confluence/display/TS/What's+new+in+v4.2.x#What'snewinv4.2.x-RFC5077TLSSessiontickets">yes</a></td>
+            <td class="ok"><a href="https://issues.apache.org/jira/browse/TS-2367">yes</a></td>
+            <td class="ok"><a href="https://issues.apache.org/jira/browse/TS-2503">dynamic</a></td>
+            <td class="ok"><a href="http://mail-archives.us.apache.org/mod_mbox/www-announce/201206.mbox/%3C4FE245C6.6060900@apache.org%3E">yes</a></td>
+            <td class="ok"><a href="https://issues.apache.org/jira/browse/TS-2372">yes</a></td>
+            <td class="ok"><a href="https://docs.trafficserver.apache.org/en/latest/admin-guide/files/records.config.en.html#http-2-configuration">yes</a></td>
+            <td class="ok"><a href="https://cwiki.apache.org/confluence/display/TS/What%27s+New+in+v8.0.x">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/mholt/caddy">Caddy</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#summary">yes</a></td>
+            <td class="ok"><a href="https://caddyserver.com/docs/tls#protocols">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://support.f5.com/kb/en-us/solutions/public/14000/700/sol14783.html">F5 BIG-IP</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/bigip-ssl-administration-11-6-0/5.html#unique_828493537">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/bigip-ssl-administration-11-6-0/5.html#unique_774070786">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/bigip-ssl-administration-11-6-0/4.html#unique_823049624">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/content/kb/en-us/products/big-ip_ltm/manuals/product/bigip-ssl-administration-12-1-0/_jcr_content/pdfAttach/download/file.res/BIG-IP_System__SSL_Administration.pdf">yes</a></a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip-aam/manuals/product/aam-concepts-11-6-0/15.html">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/solutions/public/13000/100/sol13163.html">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip-aam/manuals/product/aam-concepts-11-6-0/15.html">yes</a></td>
+            <td class="ok"><a href="https://support.f5.com/kb/en-us/products/big-ip_ltm/releasenotes/product/relnote-bigip-14-1-0.html#rn_ltm-tmos_14101_new">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://h2o.examp1e.net/">H2O</a></td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/base_directives.html#ssl-session-resumption">yes</a></td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/base_directives.html#ssl-session-resumption">yes</a></td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/base_directives.html#ocsp-update-interval">yes</a></td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/http2_directives.html#latency-optimization">dynamic</a></td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/base_directives.html#ssl-session-resumption-ticket-based">yes</a></td>
+            <td class="ok"><a href="https://h2o.examp1e.net/configure/http2_directives.html">yes</a></td>
+            <td class="ok"><a href="https://github.com/h2o/h2o/releases/tag/v2.2.0">yes</a></td>
+            <td class="ok"><a href="https://github.com/h2o/h2o/releases/tag/v2.2.0">yes</td>
+          </tr>
+          <tr>
+            <td><a href="https://cbonte.github.io/haproxy-dconv/1.8/configuration.html">HAProxy</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/configuration-1.5.html#5.1-no-tls-tickets">yes</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/configuration-1.5.html#5.1-no-tls-tickets">yes</a></td>
+            <td class="ok"><a href="https://kura.io/2014/07/02/haproxy-ocsp-stapling/">yes</a></td>
+            <td class="ok"><a href="https://gist.github.com/igrigorik/8960971">dynamic</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/configuration-1.5.html#5.1-alpn">yes</a></td>
+            <td class="ok"><a href="https://wiki.mozilla.org/Security/Server_Side_TLS#Haproxy">yes</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/1.8/configuration.html#1.1">yes</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/1.8/configuration.html#5.1-ssl-max-ver">yes</a></td>
+            <td class="ok"><a href="https://cbonte.github.io/haproxy-dconv/1.8/configuration.html#5.1-allow-0rtt">yes</a></td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/varnish/hitch">Hitch</a></td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://github.com/varnish/hitch/blob/master/docs/configuration.md#ocsp-stapling">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://github.com/varnish/hitch/blob/master/docs/configuration.md#alpnnpn-support">yes</a></td>
+            <td class="ok">yes</td>
+            <td class=ok><a href="https://github.com/varnish/hitch/blob/master/docs/configuration.md#alpnnpn-support">yes</a></td>
+            <td class="ok"><a href="https://github.com/varnish/hitch/blob/master/CHANGES.rst#hitch-150-2018-12-17">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.iis.net/configreference">IIS</a></td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://technet.microsoft.com/en-us/library/hh831771.aspx">yes</a></td>
+            <td class="ok"><a href="https://unmitigatedrisk.com/?p=368">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://technet.microsoft.com/en-us/library/hh831771.aspx">yes</a></td>
+            <td class="ok"><a href="https://blogs.technet.com/b/erezs_iis_blog/archive/2013/08/22/perfect-secrecy-in-an-imperfect-world.aspx">yes</a></td>
+            <td class="ok"><a href="https://blogs.iis.net/nazim/http-2-for-iis-in-windows-10-technical-preview">yes</a></td>
+            <td class="ok"><a href="https://docs.microsoft.com/en-us/windows-server/get-started/whats-new-in-windows-server-2022#transport-https-and-tls-13-enabled-by-default-on-windows-server-2022">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.citrix.com/products/citrix-adc/?posit=glnav">Citrix ADC</a></td>
+            <td class="ok"><a href="https://support.citrix.com/article/CTX121925">yes</a></td>
+            <td class="ok"><a href="https://docs.citrix.com/en-us/netscaler/12/ssl/ssl-profiles/ssl-enabling-the-default-profile.html">yes</a></td>
+            <td class="ok"><a href="https://docs.citrix.com/en-us/netscaler/12/ssl/ssl-11-1-ocsp-stapling-solution.html">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://docs.citrix.com/en-us/netscaler/12/ssl/ciphers-available-on-the-citrix-ADC-appliances/diffie-hellman-key-generation-and-achieving-pfs-with-dhe.html">yes</a></td>
+            <td class="ok"><a href="https://docs.citrix.com/en-us/netscaler/12/system/http-configurations/configuring-http2.html">yes</a></td>
+            <td class="ok"><a href="https://www.citrix.com/blogs/2018/09/11/citrix-announces-adc-support-for-tls-1-3/">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL">lighttpd</a></td>
+            <td class="alert"><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL#Session-Caching">no</a></td>
+            <td class="ok"><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL#Session-Tickets">yes</a></td>
+            <td class="ok"><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL#OCSP-Stapling">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL#Perfect-Forward-Secrecy-PFS">yes</a></td>
+            <td class="ok"><a href="https://redmine.lighttpd.net/issues/2813">yes</a></td>
+            <td class="ok"><a href="https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html">NGINX</a></td>
+            <td class="ok"><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_session_cache">yes</a></td>
+            <td class="ok"><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_session_tickets">yes</a></td>
+            <td class="ok"><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_stapling">yes</a></td>
+            <td class="warn"><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_buffer_size">static</a> (16k)</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://wiki.mozilla.org/Security/Server_Side_TLS#Nginx">yes</a></td>
+            <td class="ok"><a href="https://www.nginx.com/blog/early-alpha-patch-http2/">yes</a></td>
+            <td class="ok"><a href="https://twitter.com/nginxorg/status/856896480497385473">yes</a></td>
+            <td class="ok"><a href="https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_early_data">yes</a></td>
+          </tr>
+          <tr>
+            <td><a href="https://nodejs.org/api/https.html">node.js</a></td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://nodejs.org/api/tls.html#tls_tls_createserver_options_secureconnectionlistener">yes</a></td>
+            <td class="warn"><a href="https://nodejs.org/api/tls.html#tls_event_ocsprequest">optional</a></td>
+            <td class="warn"><a href="https://nodejs.org/api/tls.html#tls_tlssocket_setmaxsendfragment_size">optional</a></td>
+            <td class="ok"><a href="https://nodejs.org/api/tls.html#tls_event_secureconnection">yes</a></td>
+            <td class="ok"><a href="https://nodejs.org/api/tls.html#tls_perfect_forward_secrecy">yes</a></td>
+            <td class="ok"><a href="https://nodejs.org/dist/latest-v12.x/docs/api/http2.html">yes</a></td>
+            <td class="ok"><a href="https://github.com/nodejs/node/blob/master/doc/changelogs/CHANGELOG_V12.md#2019-04-23-version-1200-current-bethgriggs">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://golang.org/pkg/crypto/tls/">Go</a></td>
+            <td class="ok"><a href="https://golang.org/pkg/crypto/tls/#ClientSessionState">yes</a></td>
+            <td class="ok"><a href="https://golang.org/pkg/crypto/tls/#Config.SetSessionTicketKeys">yes</a></td>
+            <td class="warn"><a href="https://golang.org/pkg/crypto/tls/#Certificate">optional</a></td>
+            <td class="ok"><a href="https://golang.org/doc/go1.7#crypto_tls">yes</a></td>
+            <td class="ok"><a href="https://golang.org/pkg/crypto/tls/#Config">yes</a></td>
+            <td class="ok"><a href="https://golang.org/pkg/crypto/tls/#Config">yes</a></td>
+            <td class="ok"><a href="https://golang.org/doc/go1.6#http2">yes</a></td>
+            <td class="ok"><a href="https://golang.org/doc/go1.12#tls_1_3">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://nghttp2.org/documentation/nghttpx.1.html">nghttpx</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#session-id-resumption">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#tls-session-ticket-resumption">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#ocsp-stapling">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--tls-dyn-rec-warmup-threshold">dynamic</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--npn-list">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#cmdoption-nghttpx--ciphers">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/documentation/nghttpx.1.html#http-2-and-spdy">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/blog/2018/10/04/nghttp2-v1-34-0/">yes</a></td>
+            <td class="ok"><a href="https://nghttp2.org/blog/2018/10/04/nghttp2-v1-34-0/">yes</a></td>
+          </tr>
+          <tr>
+            <td><a href="https://www.pulsesecure.net/vtm">Pulse Secure vTM</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=224">yes</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=228">yes</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=225">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=175">yes</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=219">yes</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1027/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/17.4/ps-vtm-17.4-userguide.pdf#page=175">yes</a></td>
+            <td class="ok"><a href="https://www.pulsesecure.net/download/techpubs/current/1441/Pulse-vADC-Solutions/Pulse-Virtual-Traffic-Manager/18.3/ps-vtm-18.3-userguide.pdf#page=226">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.shimmercat.com/">ShimmerCat</a></td>
+            <td class="ok"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#misc-tls-features">yes</a></td>
+            <td class="alert"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#misc-tls-features">no</a></td>
+            <td class="alert"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#misc-tls-features">no</a></td>
+            <td class="ok"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#frame-sizes-for-data-headers">yes</a></td>
+            <td class="ok"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#misc-tls-features">yes</a></td>
+            <td class="ok"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#misc-tls-features">yes</a></td>
+            <td class="ok"><a href="https://www.shimmercat.com/en/docs/1.5/featureset/#protocol-support">yes</a></td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+       </tbody>
+      </table>
+
+      <p>Your favorite server missing, or found an error? Open a <a href="https://github.com/igrigorik/istlsfastyet.com/issues">pull request!</a></p>
+
+      <hr />
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="large-12 columns">
+      <h3 id="cdn-paas"><a href="#cdn-paas">CDN &amp; PaaS performance</a></h3>
+      <p>Using a CDN allows us to terminate the connection close to the user, which can significantly reduce the cost of TCP and TLS handshake - see <a href="https://hpbn.co/transport-layer-security-tls/#leverage-early-termination">early termination</a>. For best results you should be using a CDN to serve both static and dynamic content.</p>
+
+      <table class="cf">
+        <thead>
+          <tr>
+            <th style="width:100px">&nbsp;</th>
+            <th>Session identifiers</th>
+            <th>Session tickets</th>
+            <th>OCSP stapling</th>
+            <th>Dynamic record sizing</th>
+            <th>ALPN</th>
+            <th>Forward secrecy</th>
+            <th>HTTP/2</th>
+            <th>TLS 1.3</th>
+            <th>TLS 1.3 <nobr>0-RTT</nobr></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Akamai</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://community.akamai.com/customers/s/article/WebPerformanceCertificateProvisioningSystemCPSRecommendationsandBestPractices20180719231737">yes</a></td>
+            <td class="warn">configurable (static)</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://http2.akamai.com/">yes</a></td>
+            <td class="ok"><a href="https://community.akamai.com/customers/s/article/Get-ready-for-TLS-1-3">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>AWS ELB (Classic)</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://aws.amazon.com/about-aws/whats-new/2014/02/19/elastic-load-balancing-perfect-forward-secrecy-and-more-new-security-features/">yes</a></td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>AWS ELB (Application)</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://aws.amazon.com/about-aws/whats-new/2014/02/19/elastic-load-balancing-perfect-forward-secrecy-and-more-new-security-features/">yes</a></td>
+            <td class="ok"><a href="https://aws.amazon.com/blogs/aws/new-aws-application-load-balancer/">yes</a></td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>AWS CloudFront</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://aws.amazon.com/about-aws/whats-new/2016/09/amazon-cloudfront-now-supports-http2/">yes</a></td>
+            <td class="ok"><a href="https://aws.amazon.com/about-aws/whats-new/2020/09/cloudfront-tlsv1-3-support/">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>BelugaCDN</td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">dynamic</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="ok"><a href="https://docs.belugacdn.com/docs/ssl-certificates">yes</a></td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>CDN77</td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">yes</a></td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">yes</a></td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">yes</a></td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">dynamic</a></td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">yes</a></td>
+            <td class="ok"><a href="https://client.cdn77.com/support/knowledgebase/general-faq/ssl-tech-specs">yes</a></td>
+            <td class="ok"><a href="https://www.cdn77.com/http2">yes</a></td>
+            <td class="ok"><a href="https://www.cdn77.com/blog/latest-tls-improving-https/">yes</a></td>
+            <td class="ok"><a href="https://www.cdn77.com/blog/latest-tls-improving-https/">yes</a></td>
+          </tr>
+          <tr>
+            <td>Cloudflare</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">dynamic</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://blog.cloudflare.com/introducing-http2/">yes</a></td>
+            <td class="ok"><a href="https://blog.cloudflare.com/introducing-tls-1-3/">yes</a></td>
+            <td class="ok"><a href="https://blog.cloudflare.com/introducing-0-rtt/">yes</a></td>
+          </tr>
+          <tr>
+            <td>ChinaNetCenter</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>EdgeCast</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.verizondigitalmedia.com/blog/2017/04/http2-done-right/">yes</a></td>
+            <td class="ok"><a href="https://www.verizondigitalmedia.com/blog/2018/12/tls-13-making-the-internet-faster-and-safer/">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Fastly</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">dynamic</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.fastly.com/blog/http2-now-general-availability">yes</a></td>
+            <td class="ok"><a href="https://docs.fastly.com/en/guides/enabling-tls-1-3-through-fastly">yes</a></td>
+            <td class="warn"><a href="https://docs.fastly.com/en/guides/enabling-tls-1-3-through-fastly#limitations-and-key-behaviors">client->Fastly only</a></td>
+          </tr>
+          <tr>
+            <td>Google App Engine</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="ok">dynamic</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Heroku</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://devcenter.heroku.com/articles/ssl#supported-ssl-protocols">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Imperva Incapsula</td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">yes</a></td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">yes</a></td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">yes</a></td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">dynamic</a></td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">yes</a></td>
+            <td class="ok"><a href="https://incapsula.zendesk.com/hc/en-us/articles/235148027-Incapsula-TLS-SSL-Tech-Specs">yes</a></td>
+            <td class="ok"><a href="https://www.incapsula.com/blog/http2-is-here-what-you-need-to-know.html">yes</a></td>
+            <td class="ok"><a href="https://docs.imperva.com/bundle/cloud-application-security/page/more/ssl-certificate.htm#TLSversionsupport">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Instart</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="warn">configurable (static)</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.instartlogic.com/blog/upgrading-http2">yes</a></td>
+            <td class="ok"><a href="https://www.instart.com/blog/may-2019-new-instart-features">yes</a></td>
+            <td class="ok"><a href="https://www.instart.com/blog/may-2019-new-instart-features">yes</a></td>
+          </tr>
+          <tr>
+            <td>KeyCDN</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.keycdn.com/support/ocsp-stapling/">yes</a></td>
+            <td class="warn">configurable (static)</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.keycdn.com/blog/keycdn-http2-support/">yes</a></td>
+            <td class="ok"><a href="https://www.keycdn.com/blog/tls-1-3-support/">yes</a></td>
+            <td class="ok"><a href="https://www.keycdn.com/blog/tls-1-3-support/">yes</a></td>
+          </tr>
+          <tr>
+            <td>Limelight</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="warn">configurable</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.limelight.com/orchestrate-platform/">yes</a></td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>StackPath</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.maxcdn.com/blog/now-shipping-ocsp-stapling/">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.maxcdn.com/blog/http2-support/">yes</a></td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Netlify</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="ok">dynamic</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="ok"><a href="https://www.netlify.com/blog/2015/10/20/netlify-news-no.-6/">yes</a></td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>QUANTIL</td>
+            <td class="ok">yes</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="ok">yes</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+            <td class="alert">no</td>
+          </tr>
+          <tr>
+            <td>Vercel Edge Network</td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/encryption#tls-resumption">yes</a></td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/encryption#tls-resumption">yes</a></td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/encryption#ocsp-stapling">yes</a></td>
+            <td class="alert">no</td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/overview#supported-protocols">yes</a></td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/encryption#supported-ciphers">yes</a></td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/overview#supported-protocols">yes</a></td>
+            <td class="ok"><a href="https://vercel.com/docs/edge-network/encryption#supported-tls-versions">yes</a></td>
+            <td class="alert">no</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Your favorite CDN or PaaS provider missing, or found an error? Open a <a href="https://github.com/igrigorik/istlsfastyet.com/issues">pull request!</a></p>
+
+      <hr />
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="large-12 columns">
+      <h3 id="faq"><a href="#faq">FAQ</a></h3>
+
+      <h4 id="benchmarks">What about benchmarks?</h4>
+      <p>Quality of implementation matters &mdash; no argument there &mdash; and you should do your due diligence. That said, you need to <i>test on your own hardware and with realistic traffic patterns</i> to get an accurate picture of what works best for your specific workload. Don't trust outdated benchmarks, update your OpenSSL libraries, update your server, and run the tests.</p>
+
+      <h4 id="ops-cost">TLS operational costs are still higher, right?</h4>
+      <p>Not necessarily. Once you enable and optimize your TLS stack you're also well on your way to deploying HTTP/2. Unlike HTTP/1.1, HTTP/2 requires only a single connection per origin, which means fewer sockets, memory buffers, TLS handshakes, and so on. As a result, it may well be the case that you will be able to <a href="https://www.neotys.com/blog/performance-of-spdy-enabled-web-servers/">handle more users with fewer resources</a>.</p>
+
+      <h4 id="latency">TLS still adds an extra RTT; can we fix that?</h4>
+      <p>One possible route is to leverage TCP Fast Open, which would allow us to send the ClientHello within the TCP SYN packet &mdash; that would cut another RTT. In the meantime, both <a href="https://www.ietf.org/proceedings/88/slides/slides-88-tls-4.pdf">TLS 1.3</a> and QUIC are experimenting with "zero-RTT" handshake mechanisms. See <a href="https://docs.google.com/document/d/1g5nIXAIkN_Y-7XJW5K45IblHd_L2f5LTaDUDwvZ5L6g/edit">QUIC crypto doc</a> and <a href="https://www.youtube.com/watch?v=hQZ-0mXFmk8">this GDL episode</a> for a general introduction to QUIC.</p>
+
+      <h4 id="ciphersuite">Which ciphersuite should I be using?</h4>
+      <p>Mozilla maintains a wiki page <a href="https://wiki.mozilla.org/Security/Server_Side_TLS#Recommended_Ciphersuite">with a recommended ciphersuite list</a> and server configuration tips.</p>
+
+      <h4 id="resumption">If TLS False Start is enabled, do I need resumption?</h4>
+      <p>Both resumption and TLS False Start eliminate an extra roundtrip from the TLS handshake. However, resumption also allows you to skip the asymmetric handshake crypto by reusing parameters from a previous session &mdash; this saves CPU cycles. In other words, yes you need both.</p>
+
+      <h4 id="cluster">I run a multi-server deployment. Any tips?</h4>
+      <p>Ensure you have a shared session cache to get a good cache hit rate on resumed sessions across different servers. Also, ensure you expire and rotate your sessions and session ticket keys in a secure manner, <a href="https://www.imperialviolet.org/2013/06/27/botchingpfs.html">especially when forward secrecy is enabled</a>.</p>
+
+      <h4 id="cert-cost">What about certificate costs?</h4>
+      <p>You can get free certificates for any use from <a href="https://letsencrypt.org/">Let’s Encrypt</a>. If you need EV verification, then you will have to pay a bit extra. Use your favorite search engine to look for and evaluate the available options. The security and integrity of your visitors' data is worth every penny!</p>
+
+      <h4 id="ecc">What about Elliptic Curve Cryptography (ECC) certificates?</h4>
+      <p>ECC certificates offer <a href="https://casecurity.org/2014/06/10/benefits-of-elliptic-curve-cryptography/">stronger security and smaller certificates</a> - e.g. a 256-bit ECC key is equivalent to a 3072-bit RSA key.  <a href="https://en.wikipedia.org/wiki/Elliptic_Curve_DSA">ECDSA</a> certificates are recommended for modern TLS clients, such as web browsers, but if you need to support <a href="https://support.globalsign.com/ssl/ssl-certificates-life-cycle/ecc-compatibility">legacy clients</a> (e.g., OS/software from 2008 or earlier often found in enterprise environments) that lack ECDSA support, you can provide RSA as a fallback via a <a href="https://scotthelme.co.uk/hybrid-rsa-and-ecdsa-certificates-with-nginx/">hybrid certificate</a>. Consult the documentation of your server to see if RSA+ECDSA is a supported option.</p>
+
+      <h4 id="crime-breach">What about CRIME and BREACH attacks?</h4>
+      <p><a href="https://en.wikipedia.org/wiki/CRIME">CRIME</a> is an attack against compression at the TLS layer. All modern user agents disable TLS compression, but it is still recommended that you disable TLS compression on your server. <a href="https://en.wikipedia.org/wiki/BREACH_(security_exploit)">BREACH</a>, on the other hand, is an attack against compression on top of TLS (e.g. HTTP compression) and must be mitigated both at the server and application levels - <a href="https://community.qualys.com/blogs/securitylabs/2013/08/07/defending-against-the-breach-attack">read more</a>.</p>
+
+      <h4 id="migrate">How do I migrate my existing site to HTTPS?</h4>
+      <p>Checkout the <a href="https://www.youtube.com/watch?v=cBhZ6S0PFCY">HTTPS Everywhere presentation</a> (<a href="https://docs.google.com/presentation/d/15H8Sj-Zol1tcum0CSylhmXns5r7cvNFtzYrcwAzkTjM/present">slides</a>) from Google I/O to learn the best practices and the steps to safely migrate your existing content to HTTPS.</p>
+
+      <h4>Why do we need HTTPS everywhere?</h4>
+      <p>Every unencrypted HTTP request reveals information about user’s behavior. Today, there is no such thing as insensitive web traffic - <a href="https://https.cio.gov/everything/">read more</a>.</p>
+
+      <h4 id="more">Where can I learn more about TLS performance?</h4>
+      <ul>
+        <li><a href="https://www.youtube.com/watch?v=0EB7zh_7UE4">Is TLS Fast Yet?</a> video from Velocity SC 2014 (<a href="https://bit.ly/fastTLS">slides</a>).
+        <li><a href="https://www.amazon.com/gp/product/B00FM0OC4S/ref=s9_simh_gw_p351_d2_i1">High Performance Browser Networking</a> contains a <a href="https://hpbn.co/tls">full chapter on TLS performance</a>.
+      </ul>
+
+    </div>
+    <hr />
+  </div>
+
+  <div class="row">
+    <div class="large-12 medium-12 small-12 columns right">
+          <a href="https://twitter.com/share" class="twitter-share-button" data-url="https://istlsfastyet.com" data-text="TLS has exactly one performance problem: it is not used widely enough. Everything else can be optimized." data-size="large">Tweet</a>
+
+        <ul class="button-group right">
+          <li><a href="https://twitter.com/igrigorik" class="tiny button">@igrigorik</a></li>
+          <li><a href="https://github.com/igrigorik/istlsfastyet.com" class="tiny button success">View on GitHub</a></li>
+        </ul>
+    </div>
+  </div>
+
+  <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-71196-12', 'istlsfastyet.com');
+
+    // anonymize user IPs (chops off the last IP triplet)
+    ga('set', 'anonymizeIp', true);
+
+    // forces SSL for collection even if the page were somehow loaded over http://
+    ga('set', 'forceSSL', true);
+
+    ga('send', 'pageview');
+  </script>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src='https://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+  </body>
+</html>
